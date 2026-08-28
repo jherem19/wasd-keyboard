@@ -34,6 +34,8 @@ const backlightCenters = {
 const backlightOrder: KeyCode[] = ["KeyW", "KeyA", "KeyS", "KeyD"]
 const restingBacklightRadius = 0.115
 const releasedBacklightRadius = 0.14
+const introStartRotation = THREE.MathUtils.degToRad(-7)
+const introDuration = 1.1
 
 let audioContext: AudioContext | undefined
 
@@ -112,6 +114,12 @@ function CameraFromBlender() {
 }
 
 function KeyboardModel({ activeKeys, onReady }: { activeKeys: ActiveKeys; onReady: () => void }) {
+  const modelGroup = useRef<THREE.Group>(null)
+  const introElapsed = useRef(0)
+  const reduceMotion = useMemo(
+    () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    [],
+  )
   const gltf = useLoader(GLTFLoader, "/keyboard-WASD.glb", loader => {
     const draco = new DRACOLoader()
     draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/")
@@ -214,6 +222,15 @@ varying vec3 vBacklightPosition;`,
   useEffect(onReady, [onReady])
 
   useFrame((_, delta) => {
+    if (modelGroup.current) {
+      introElapsed.current = Math.min(introElapsed.current + delta, introDuration)
+      const progress = reduceMotion ? 1 : introElapsed.current / introDuration
+      const eased = 1 - Math.pow(1 - progress, 4)
+      modelGroup.current.rotation.x = THREE.MathUtils.lerp(introStartRotation, 0, eased)
+      modelGroup.current.position.y = THREE.MathUtils.lerp(-0.012, 0.004, eased)
+      modelGroup.current.scale.setScalar(THREE.MathUtils.lerp(0.68, 0.72, eased))
+    }
+
     backlightOrder.forEach((code, index) => {
       const pressed = activeKeys.current.has(code)
       const current = prepared.backlightStrengths.getComponent(index)
@@ -249,7 +266,12 @@ varying vec3 vBacklightPosition;`,
   })
 
   return (
-    <group scale={0.72} position={[0, 0.004, 0]}>
+    <group
+      ref={modelGroup}
+      scale={reduceMotion ? 0.72 : 0.68}
+      position={[0, reduceMotion ? 0.004 : -0.012, 0]}
+      rotation={[reduceMotion ? 0 : introStartRotation, 0, 0]}
+    >
       <primitive object={prepared.scene} />
     </group>
   )
