@@ -323,10 +323,10 @@ export function KeyboardExperience() {
   return (
     <main className="relative min-h-svh w-full overflow-hidden bg-black">
       <header className="pointer-events-none absolute left-0 top-[clamp(52px,11.5vh,96px)] z-20 w-full px-5 text-center">
-        <h1 className="m-0 text-[clamp(38px,4.35vw,58px)] font-normal leading-[1.05] tracking-[-0.04em] text-neutral-100">
+        <h1 className="intro-copy intro-copy-title m-0 text-[clamp(38px,4.35vw,58px)] font-normal leading-[1.05] tracking-[-0.04em] text-neutral-100">
           The WASD Keyboard
         </h1>
-        <p className="mt-5 text-[clamp(15px,1.55vw,21px)] font-normal tracking-[-0.02em] text-neutral-600">
+        <p className="intro-copy intro-copy-subtitle mt-5 text-[clamp(15px,1.55vw,21px)] font-normal tracking-[-0.02em] text-neutral-600">
           Made for the True Professionals
         </p>
       </header>
@@ -365,7 +365,7 @@ export function KeyboardExperience() {
         <Badge className="sr-only" variant="outline" aria-live="polite">{status}</Badge>
       </section>
 
-      <footer className="pointer-events-none absolute bottom-[clamp(52px,9.5vh,78px)] left-0 z-20 w-full text-center font-mono text-[10px] font-medium uppercase leading-none tracking-[0.12em] text-neutral-800">
+      <footer className="intro-copy intro-copy-credit pointer-events-none absolute bottom-[clamp(52px,9.5vh,78px)] left-0 z-20 w-full text-center font-mono text-[10px] font-medium uppercase leading-none tracking-[0.12em] text-neutral-800">
         Made by Jherem
       </footer>
     </main>
