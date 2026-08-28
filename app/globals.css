@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+:root {
+  --background: #000;
+  --foreground: #f4f4f4;
+}
+
+* { box-sizing: border-box; }
+
+html, body { margin: 0; min-width: 320px; min-height: 100%; background: var(--background); }
+
+body { overflow: hidden; color: var(--foreground); font-family: Inter, "Helvetica Neue", Arial, sans-serif; }
+
+button, input, textarea, select { font: inherit; }
