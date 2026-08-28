@@ -1,6 +1,7 @@
 "use client"
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import Image from "next/image"
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
@@ -32,19 +33,29 @@ function playKeySound(code: KeyCode) {
   if (audioContext.state === "suspended") void audioContext.resume()
 
   const now = audioContext.currentTime
-  const pitch = { KeyW: 118, KeyA: 106, KeyS: 111, KeyD: 114 }[code]
+  const pitch = { KeyW: 178, KeyA: 166, KeyS: 171, KeyD: 174 }[code]
+  const master = audioContext.createGain()
+  const compressor = audioContext.createDynamicsCompressor()
+  master.gain.value = 0.92
+  compressor.threshold.value = -18
+  compressor.knee.value = 8
+  compressor.ratio.value = 7
+  compressor.attack.value = 0.001
+  compressor.release.value = 0.045
+  master.connect(compressor).connect(audioContext.destination)
+
   const body = audioContext.createOscillator()
   const bodyGain = audioContext.createGain()
   body.type = "triangle"
   body.frequency.setValueAtTime(pitch, now)
-  body.frequency.exponentialRampToValueAtTime(62, now + 0.045)
-  bodyGain.gain.setValueAtTime(0.075, now)
-  bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06)
-  body.connect(bodyGain).connect(audioContext.destination)
+  body.frequency.exponentialRampToValueAtTime(92, now + 0.032)
+  bodyGain.gain.setValueAtTime(0.15, now)
+  bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.043)
+  body.connect(bodyGain).connect(master)
   body.start(now)
-  body.stop(now + 0.065)
+  body.stop(now + 0.045)
 
-  const frames = Math.floor(audioContext.sampleRate * 0.025)
+  const frames = Math.floor(audioContext.sampleRate * 0.018)
   const buffer = audioContext.createBuffer(1, frames, audioContext.sampleRate)
   const samples = buffer.getChannelData(0)
   for (let i = 0; i < frames; i++) {
@@ -55,11 +66,23 @@ function playKeySound(code: KeyCode) {
   const clickGain = audioContext.createGain()
   click.buffer = buffer
   filter.type = "bandpass"
-  filter.frequency.value = 1700
-  filter.Q.value = 0.8
-  clickGain.gain.value = 0.032
-  click.connect(filter).connect(clickGain).connect(audioContext.destination)
+  filter.frequency.value = 2350
+  filter.Q.value = 0.72
+  clickGain.gain.setValueAtTime(0.13, now)
+  clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.018)
+  click.connect(filter).connect(clickGain).connect(master)
   click.start(now)
+
+  const snap = audioContext.createOscillator()
+  const snapGain = audioContext.createGain()
+  snap.type = "sine"
+  snap.frequency.setValueAtTime(760, now)
+  snap.frequency.exponentialRampToValueAtTime(420, now + 0.016)
+  snapGain.gain.setValueAtTime(0.055, now)
+  snapGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.02)
+  snap.connect(snapGain).connect(master)
+  snap.start(now)
+  snap.stop(now + 0.022)
 }
 
 function CameraFromBlender() {
@@ -184,6 +207,23 @@ export function KeyboardExperience() {
           Made for the True Professionals
         </p>
       </header>
+
+      <a
+        href="https://jherem.vercel.app"
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Visit Jherem's portfolio"
+        className="group absolute right-[clamp(24px,4vw,52px)] top-[clamp(24px,4vw,40px)] z-30 rounded-full outline-none ring-offset-black transition-transform duration-300 hover:scale-105 focus-visible:ring-2 focus-visible:ring-neutral-300 focus-visible:ring-offset-4"
+      >
+        <Image
+          src="/avatar-jherem.png"
+          alt="Jherem"
+          width={44}
+          height={44}
+          priority
+          className="size-10 rounded-full border border-white/15 object-cover grayscale brightness-75 transition duration-300 group-hover:grayscale-0 group-hover:brightness-100 sm:size-11"
+        />
+      </a>
 
       <section className="absolute inset-x-0 bottom-[clamp(58px,8vh,78px)] top-[clamp(188px,25vh,220px)] z-10 overflow-hidden bg-[radial-gradient(ellipse_42%_54%_at_50%_55%,#323232_0%,#191919_38%,#000_76%)]" aria-label="Interactive 3D WASD keyboard">
         {!ready && <Skeleton className="absolute inset-0 z-20 rounded-none bg-black" />}
