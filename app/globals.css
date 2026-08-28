@@ -12,3 +12,53 @@ html, body { margin: 0; min-width: 320px; min-height: 100%; background: var(--ba
 body { overflow: hidden; color: var(--foreground); font-family: Inter, "Helvetica Neue", Arial, sans-serif; }
 
 button, input, textarea, select { font: inherit; }
+
+@keyframes intro-copy-reveal {
+  from {
+    opacity: 0;
+    filter: blur(var(--intro-blur));
+    transform: translate3d(0, var(--intro-y), 0);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.intro-copy {
+  opacity: 0;
+  will-change: opacity, filter, transform;
+  animation: intro-copy-reveal var(--intro-duration) cubic-bezier(0.16, 1, 0.3, 1) var(--intro-delay) forwards;
+}
+
+.intro-copy-title {
+  --intro-blur: 12px;
+  --intro-y: 18px;
+  --intro-duration: 900ms;
+  --intro-delay: 90ms;
+}
+
+.intro-copy-subtitle {
+  --intro-blur: 9px;
+  --intro-y: 12px;
+  --intro-duration: 850ms;
+  --intro-delay: 210ms;
+}
+
+.intro-copy-credit {
+  --intro-blur: 6px;
+  --intro-y: 8px;
+  --intro-duration: 750ms;
+  --intro-delay: 720ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .intro-copy {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    animation: none;
+  }
+}
