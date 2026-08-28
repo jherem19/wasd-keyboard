@@ -32,6 +32,8 @@ const backlightCenters = {
 } as const
 
 const backlightOrder: KeyCode[] = ["KeyW", "KeyA", "KeyS", "KeyD"]
+const restingBacklightRadius = 0.115
+const releasedBacklightRadius = 0.14
 
 let audioContext: AudioContext | undefined
 
@@ -127,6 +129,12 @@ function KeyboardModel({ activeKeys, onReady }: { activeKeys: ActiveKeys; onRead
     const scene = gltf.scene.clone(true)
     const keys = {} as Partial<Record<KeyCode, PreparedKey>>
     const backlightStrengths = new THREE.Vector4(0, 0, 0, 0)
+    const backlightRadii = new THREE.Vector4(
+      restingBacklightRadius,
+      restingBacklightRadius,
+      restingBacklightRadius,
+      restingBacklightRadius,
+    )
 
     const base = scene.getObjectByName("base_keyboard_Baked") ?? scene.getObjectByName("base keyboard_Baked")
     base?.traverse(child => {
@@ -137,6 +145,7 @@ function KeyboardModel({ activeKeys, onReady }: { activeKeys: ActiveKeys; onRead
         material.onBeforeCompile = shader => {
           shader.uniforms.uBacklightMap = { value: backlightTexture }
           shader.uniforms.uBacklightStrengths = { value: backlightStrengths }
+          shader.uniforms.uBacklightRadii = { value: backlightRadii }
           shader.uniforms.uBacklightCenters = {
             value: backlightOrder.map(code => backlightCenters[code]),
           }
@@ -155,6 +164,7 @@ function KeyboardModel({ activeKeys, onReady }: { activeKeys: ActiveKeys; onRead
               `#include <common>
 uniform sampler2D uBacklightMap;
 uniform vec4 uBacklightStrengths;
+uniform vec4 uBacklightRadii;
 uniform vec2 uBacklightCenters[4];
 varying vec3 vBacklightPosition;`,
             )
@@ -166,7 +176,8 @@ varying vec3 vBacklightPosition;`,
   float backlightMask = 0.0;
   for ( int i = 0; i < 4; i++ ) {
     float distanceToKey = distance( vBacklightPosition.xz, uBacklightCenters[i] );
-    float circle = 1.0 - smoothstep( 0.035, 0.115, distanceToKey );
+    float radius = uBacklightRadii[i];
+    float circle = 1.0 - smoothstep( radius * 0.3, radius, distanceToKey );
     backlightMask = max( backlightMask, circle * uBacklightStrengths[i] );
   }
   vec3 visibleBakedColor = mix( baseBakedColor.rgb, litBakedColor.rgb, backlightMask );
@@ -197,17 +208,28 @@ varying vec3 vBacklightPosition;`,
       })
       keys[code] = { object, restY: object.position.y, materials }
     }
-    return { scene, keys, backlightStrengths }
+    return { scene, keys, backlightStrengths, backlightRadii }
   }, [backlightTexture, gltf.scene])
 
   useEffect(onReady, [onReady])
 
   useFrame((_, delta) => {
     backlightOrder.forEach((code, index) => {
+      const pressed = activeKeys.current.has(code)
       const current = prepared.backlightStrengths.getComponent(index)
       prepared.backlightStrengths.setComponent(
         index,
-        THREE.MathUtils.damp(current, activeKeys.current.has(code) ? 1 : 0, 18, delta),
+        THREE.MathUtils.damp(current, pressed ? 1 : 0, pressed ? 22 : 5.8, delta),
+      )
+
+      const currentRadius = prepared.backlightRadii.getComponent(index)
+      const radiusTarget = pressed ? restingBacklightRadius : releasedBacklightRadius
+      const nextRadius = THREE.MathUtils.damp(currentRadius, radiusTarget, pressed ? 24 : 7, delta)
+      prepared.backlightRadii.setComponent(
+        index,
+        !pressed && prepared.backlightStrengths.getComponent(index) < 0.004
+          ? restingBacklightRadius
+          : nextRadius,
       )
     })
 
