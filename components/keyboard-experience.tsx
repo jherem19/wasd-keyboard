@@ -1,8 +1,8 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react"
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Image from "next/image"
-import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber"
+import { Canvas, type ThreeEvent, useFrame, useLoader, useThree } from "@react-three/fiber"
 import * as THREE from "three"
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js"
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js"
@@ -113,7 +113,17 @@ function CameraFromBlender() {
   return null
 }
 
-function KeyboardModel({ activeKeys, onReady }: { activeKeys: ActiveKeys; onReady: () => void }) {
+function KeyboardModel({
+  activeKeys,
+  onPointerPress,
+  onPointerRelease,
+  onReady,
+}: {
+  activeKeys: ActiveKeys
+  onPointerPress: (code: KeyCode, pointerId: number) => void
+  onPointerRelease: (pointerId: number) => void
+  onReady: () => void
+}) {
   const modelGroup = useRef<THREE.Group>(null)
   const introElapsed = useRef(0)
   const reduceMotion = useMemo(
@@ -203,8 +213,10 @@ varying vec3 vBacklightPosition;`,
     for (const [code, name] of Object.entries(keyNames) as Array<[KeyCode, string]>) {
       const object = scene.getObjectByName(name)
       if (!object) continue
+      object.userData.keyCode = code
       const materials: PreparedKey["materials"] = []
       object.traverse(child => {
+        child.userData.keyCode = code
         if (!(child instanceof THREE.Mesh)) return
         const originals = Array.isArray(child.material) ? child.material : [child.material]
         const clones = originals.map(original => {
@@ -218,6 +230,30 @@ varying vec3 vBacklightPosition;`,
     }
     return { scene, keys, backlightStrengths, backlightRadii }
   }, [backlightTexture, gltf.scene])
+
+  const keyFromPointerEvent = useCallback((event: ThreeEvent<PointerEvent>) => {
+    let object: THREE.Object3D | null = event.object
+    while (object) {
+      const code = object.userData.keyCode
+      if (typeof code === "string" && code in keyNames) return code as KeyCode
+      object = object.parent
+    }
+    return null
+  }, [])
+
+  const pointerDown = useCallback((event: ThreeEvent<PointerEvent>) => {
+    const code = keyFromPointerEvent(event)
+    if (!code || event.button !== 0) return
+    event.stopPropagation()
+    ;(event.target as HTMLElement).setPointerCapture?.(event.pointerId)
+    onPointerPress(code, event.pointerId)
+  }, [keyFromPointerEvent, onPointerPress])
+
+  const pointerRelease = useCallback((event: ThreeEvent<PointerEvent>) => {
+    event.stopPropagation()
+    onPointerRelease(event.pointerId)
+    ;(event.target as HTMLElement).releasePointerCapture?.(event.pointerId)
+  }, [onPointerRelease])
 
   useEffect(onReady, [onReady])
 
@@ -271,6 +307,10 @@ varying vec3 vBacklightPosition;`,
       scale={reduceMotion ? 0.72 : 0.68}
       position={[0, reduceMotion ? 0.004 : -0.012, 0]}
       rotation={[reduceMotion ? 0 : introStartRotation, 0, 0]}
+      onPointerDown={pointerDown}
+      onPointerUp={pointerRelease}
+      onPointerCancel={pointerRelease}
+      onLostPointerCapture={pointerRelease}
     >
       <primitive object={prepared.scene} />
     </group>
@@ -279,23 +319,44 @@ varying vec3 vBacklightPosition;`,
 
 function Scene({ onReady, onStatus }: { onReady: () => void; onStatus: (status: string) => void }) {
   const activeKeys = useRef(new Set<KeyCode>())
+  const activeSources = useRef(new Map<string, KeyCode>())
+
+  const press = useCallback((source: string, code: KeyCode) => {
+    if (activeSources.current.has(source)) return
+    const alreadyPressed = Array.from(activeSources.current.values()).includes(code)
+    activeSources.current.set(source, code)
+    activeKeys.current.add(code)
+    if (!alreadyPressed) playKeySound(code)
+    onStatus(`${code.slice(-1)} pressed`)
+  }, [onStatus])
+
+  const release = useCallback((source: string) => {
+    const code = activeSources.current.get(source)
+    if (!code) return
+    activeSources.current.delete(source)
+    const stillPressed = Array.from(activeSources.current.values()).includes(code)
+    if (!stillPressed) {
+      activeKeys.current.delete(code)
+      onStatus(`${code.slice(-1)} released`)
+    }
+  }, [onStatus])
 
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (!(event.code in keyNames) || event.repeat) return
       event.preventDefault()
       const code = event.code as KeyCode
-      activeKeys.current.add(code)
-      playKeySound(code)
-      onStatus(`${code.slice(-1)} pressed`)
+      press(`keyboard:${code}`, code)
     }
     const up = (event: KeyboardEvent) => {
       if (!(event.code in keyNames)) return
       const code = event.code as KeyCode
-      activeKeys.current.delete(code)
-      onStatus(`${code.slice(-1)} released`)
+      release(`keyboard:${code}`)
     }
-    const blur = () => activeKeys.current.clear()
+    const blur = () => {
+      activeSources.current.clear()
+      activeKeys.current.clear()
+    }
     window.addEventListener("keydown", down)
     window.addEventListener("keyup", up)
     window.addEventListener("blur", blur)
@@ -304,13 +365,18 @@ function Scene({ onReady, onStatus }: { onReady: () => void; onStatus: (status: 
       window.removeEventListener("keyup", up)
       window.removeEventListener("blur", blur)
     }
-  }, [onStatus])
+  }, [press, release])
 
   return (
     <>
       <CameraFromBlender />
       <Suspense fallback={null}>
-        <KeyboardModel activeKeys={activeKeys} onReady={onReady} />
+        <KeyboardModel
+          activeKeys={activeKeys}
+          onPointerPress={(code, pointerId) => press(`pointer:${pointerId}`, code)}
+          onPointerRelease={pointerId => release(`pointer:${pointerId}`)}
+          onReady={onReady}
+        />
       </Suspense>
     </>
   )
@@ -348,7 +414,7 @@ export function KeyboardExperience() {
         />
       </a>
 
-      <section className="absolute inset-x-0 bottom-[clamp(58px,8vh,78px)] top-[clamp(188px,25vh,220px)] z-10 overflow-hidden bg-[radial-gradient(ellipse_42%_54%_at_50%_55%,#323232_0%,#191919_38%,#000_76%)]" aria-label="Interactive 3D WASD keyboard">
+      <section className="absolute inset-x-0 bottom-[clamp(58px,8vh,78px)] top-[clamp(188px,25vh,220px)] z-10 touch-none select-none overflow-hidden bg-[radial-gradient(ellipse_42%_54%_at_50%_55%,#323232_0%,#191919_38%,#000_76%)]" aria-label="Interactive 3D WASD keyboard">
         {!ready && <Skeleton className="absolute inset-0 z-20 rounded-none bg-black" />}
         <Canvas
           camera={{ near: 0.01, far: 20 }}
