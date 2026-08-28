@@ -185,7 +185,7 @@ export function KeyboardExperience() {
         </p>
       </header>
 
-      <section className="absolute inset-x-0 bottom-[clamp(58px,8vh,78px)] top-[clamp(188px,25vh,220px)] z-10 overflow-hidden bg-[radial-gradient(ellipse_34%_53%_at_50%_55%,#323232_0%,#0b0b0b_38%,#000_76%)]" aria-label="Interactive 3D WASD keyboard">
+      <section className="absolute inset-x-0 bottom-[clamp(58px,8vh,78px)] top-[clamp(188px,25vh,220px)] z-10 overflow-hidden bg-[radial-gradient(ellipse_50%_58%_at_50%_55%,#323232_0%,#191919_38%,#000_76%)]" aria-label="Interactive 3D WASD keyboard">
         {!ready && <Skeleton className="absolute inset-0 z-20 rounded-none bg-black" />}
         <Canvas
           camera={{ near: 0.01, far: 20 }}
