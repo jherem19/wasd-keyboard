@@ -24,6 +24,15 @@ type PreparedKey = {
   materials: Array<{ material: THREE.MeshStandardMaterial; restEmissive: number }>
 }
 
+const backlightCenters = {
+  KeyW: new THREE.Vector2(0, -0.125),
+  KeyA: new THREE.Vector2(-0.125, 0),
+  KeyS: new THREE.Vector2(0, 0),
+  KeyD: new THREE.Vector2(0.125, 0),
+} as const
+
+const backlightOrder: KeyCode[] = ["KeyW", "KeyA", "KeyS", "KeyD"]
+
 let audioContext: AudioContext | undefined
 
 function playKeySound(code: KeyCode) {
@@ -106,10 +115,72 @@ function KeyboardModel({ activeKeys, onReady }: { activeKeys: ActiveKeys; onRead
     draco.setDecoderPath("https://www.gstatic.com/draco/versioned/decoders/1.5.7/")
     loader.setDRACOLoader(draco)
   })
+  const backlightTexture = useLoader(THREE.TextureLoader, "/keyboard-WASD-backlight.png")
+
+  useMemo(() => {
+    backlightTexture.colorSpace = THREE.SRGBColorSpace
+    backlightTexture.flipY = false
+    backlightTexture.needsUpdate = true
+  }, [backlightTexture])
 
   const prepared = useMemo(() => {
     const scene = gltf.scene.clone(true)
     const keys = {} as Partial<Record<KeyCode, PreparedKey>>
+    const backlightStrengths = new THREE.Vector4(0, 0, 0, 0)
+
+    const base = scene.getObjectByName("base_keyboard_Baked") ?? scene.getObjectByName("base keyboard_Baked")
+    base?.traverse(child => {
+      if (!(child instanceof THREE.Mesh)) return
+      const originals = Array.isArray(child.material) ? child.material : [child.material]
+      const backlightMaterials = originals.map(original => {
+        const material = original.clone() as THREE.MeshStandardMaterial
+        material.onBeforeCompile = shader => {
+          shader.uniforms.uBacklightMap = { value: backlightTexture }
+          shader.uniforms.uBacklightStrengths = { value: backlightStrengths }
+          shader.uniforms.uBacklightCenters = {
+            value: backlightOrder.map(code => backlightCenters[code]),
+          }
+          shader.vertexShader = shader.vertexShader
+            .replace(
+              "#include <common>",
+              "#include <common>\nvarying vec3 vBacklightPosition;",
+            )
+            .replace(
+              "#include <begin_vertex>",
+              "#include <begin_vertex>\nvBacklightPosition = position;",
+            )
+          shader.fragmentShader = shader.fragmentShader
+            .replace(
+              "#include <common>",
+              `#include <common>
+uniform sampler2D uBacklightMap;
+uniform vec4 uBacklightStrengths;
+uniform vec2 uBacklightCenters[4];
+varying vec3 vBacklightPosition;`,
+            )
+            .replace(
+              "#include <emissivemap_fragment>",
+              `#ifdef USE_EMISSIVEMAP
+  vec4 baseBakedColor = texture2D( emissiveMap, vEmissiveMapUv );
+  vec4 litBakedColor = texture2D( uBacklightMap, vEmissiveMapUv );
+  float backlightMask = 0.0;
+  for ( int i = 0; i < 4; i++ ) {
+    float distanceToKey = distance( vBacklightPosition.xz, uBacklightCenters[i] );
+    float circle = 1.0 - smoothstep( 0.035, 0.115, distanceToKey );
+    backlightMask = max( backlightMask, circle * uBacklightStrengths[i] );
+  }
+  vec3 visibleBakedColor = mix( baseBakedColor.rgb, litBakedColor.rgb, backlightMask );
+  totalEmissiveRadiance *= visibleBakedColor;
+#endif`,
+            )
+        }
+        material.customProgramCacheKey = () => "wasd-circular-backlight-v1"
+        material.needsUpdate = true
+        return material
+      })
+      child.material = Array.isArray(child.material) ? backlightMaterials : backlightMaterials[0]
+    })
+
     for (const [code, name] of Object.entries(keyNames) as Array<[KeyCode, string]>) {
       const object = scene.getObjectByName(name)
       if (!object) continue
@@ -126,12 +197,20 @@ function KeyboardModel({ activeKeys, onReady }: { activeKeys: ActiveKeys; onRead
       })
       keys[code] = { object, restY: object.position.y, materials }
     }
-    return { scene, keys }
-  }, [gltf.scene])
+    return { scene, keys, backlightStrengths }
+  }, [backlightTexture, gltf.scene])
 
   useEffect(onReady, [onReady])
 
   useFrame((_, delta) => {
+    backlightOrder.forEach((code, index) => {
+      const current = prepared.backlightStrengths.getComponent(index)
+      prepared.backlightStrengths.setComponent(
+        index,
+        THREE.MathUtils.damp(current, activeKeys.current.has(code) ? 1 : 0, 18, delta),
+      )
+    })
+
     for (const [code, item] of Object.entries(prepared.keys) as Array<[KeyCode, PreparedKey]>) {
       const pressed = activeKeys.current.has(code)
       const target = item.restY - (pressed ? 0.012 : 0)
