@@ -49,7 +49,7 @@ function playKeySound(code: KeyCode) {
   const pitch = { KeyW: 178, KeyA: 166, KeyS: 171, KeyD: 174 }[code]
   const master = audioContext.createGain()
   const compressor = audioContext.createDynamicsCompressor()
-  master.gain.value = 1.25
+  master.gain.value = 1.38
   compressor.threshold.value = -18
   compressor.knee.value = 8
   compressor.ratio.value = 7
